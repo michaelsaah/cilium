@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	pb "github.com/cilium/cilium/api/v1/flow"
+	"github.com/cilium/cilium/pkg/hubble/metrics/api"
 )
 
 func Test_httpHandler_Status(t *testing.T) {
@@ -33,15 +34,17 @@ func Test_httpHandler_ProcessFlow(t *testing.T) {
 	handler := plugin.NewHandler()
 	require.Error(t, handler.Init(prometheus.NewRegistry(), map[string]string{"destinationContext": "invalid"}))
 	require.NoError(t, handler.Init(prometheus.NewRegistry(), nil))
+	pf, ok := handler.(api.FlowProcessor)
+	require.True(t, ok)
 	// shouldn't count
-	handler.ProcessFlow(ctx, &pb.Flow{})
+	pf.ProcessFlow(ctx, &pb.Flow{})
 	// shouldn't count
-	handler.ProcessFlow(ctx, &pb.Flow{L7: &pb.Layer7{
+	pf.ProcessFlow(ctx, &pb.Flow{L7: &pb.Layer7{
 		Type:   pb.L7FlowType_RESPONSE,
 		Record: &pb.Layer7_Dns{},
 	}})
 	// should count for request
-	handler.ProcessFlow(ctx, &pb.Flow{
+	pf.ProcessFlow(ctx, &pb.Flow{
 		L7: &pb.Layer7{
 			Type: pb.L7FlowType_REQUEST,
 			Record: &pb.Layer7_Http{Http: &pb.HTTP{
@@ -50,7 +53,7 @@ func Test_httpHandler_ProcessFlow(t *testing.T) {
 		},
 	})
 	// should count for response
-	handler.ProcessFlow(ctx, &pb.Flow{
+	pf.ProcessFlow(ctx, &pb.Flow{
 		L7: &pb.Layer7{
 			Type:      pb.L7FlowType_RESPONSE,
 			LatencyNs: 12345678,

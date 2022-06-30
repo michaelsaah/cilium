@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	enabledMetrics api.Handlers
+	enabledMetrics *api.Handlers
 	registry       = prometheus.NewPedanticRegistry()
 )
 
