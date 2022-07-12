@@ -1327,6 +1327,7 @@ func initEnv(cmd *cobra.Command) {
 	option.Config.Opts.SetBool(option.DebugLB, debugDatapath)
 	option.Config.Opts.SetBool(option.DropNotify, true)
 	option.Config.Opts.SetBool(option.TraceNotify, true)
+	option.Config.Opts.SetBool(option.TraceSockNotify, option.Config.EnableSocketLB)
 	option.Config.Opts.SetBool(option.PolicyVerdictNotify, true)
 	option.Config.Opts.SetBool(option.PolicyTracing, option.Config.EnableTracing)
 	option.Config.Opts.SetBool(option.ConntrackAccounting, true)
@@ -1366,6 +1367,8 @@ func initEnv(cmd *cobra.Command) {
 			option.Config.NodePortAcceleration != option.NodePortAccelerationDisabled
 		option.Config.KubeProxyReplacement = option.KubeProxyReplacementPartial
 		option.Config.EnableSocketLB = true
+		// Socket tracing relies on metadata that's retrieved from Kubernetes.
+		option.Config.Opts.SetBool(option.TraceSockNotify, false)
 		option.Config.EnableHostPort = false
 		option.Config.EnableNodePort = true
 		option.Config.EnableExternalIPs = true

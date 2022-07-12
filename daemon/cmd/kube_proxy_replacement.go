@@ -62,15 +62,16 @@ func initKubeProxyReplacementOptions() (bool, error) {
 	}
 
 	if option.Config.KubeProxyReplacement == option.KubeProxyReplacementDisabled {
-		log.Infof("Auto-disabling %q, %q, %q, %q features and falling back to %q",
+		log.Infof("Auto-disabling %q, %q, %q, %q, %q features and falling back to %q",
 			option.EnableNodePort, option.EnableExternalIPs,
-			option.EnableSocketLB, option.EnableHostPort,
+			option.EnableSocketLB, option.EnableHostPort, option.TraceSockNotify,
 			option.EnableHostLegacyRouting)
 
 		disableNodePort()
 		option.Config.EnableSocketLB = false
 		option.Config.EnableHostServicesTCP = false
 		option.Config.EnableHostServicesUDP = false
+		option.Config.Opts.SetBool(option.TraceSockNotify, false)
 
 		if option.Config.EnableSessionAffinity {
 			if err := disableSessionAffinityIfNeeded(probesManager, true); err != nil {
@@ -96,6 +97,7 @@ func initKubeProxyReplacementOptions() (bool, error) {
 		option.Config.EnableNodePort = true
 		option.Config.EnableExternalIPs = true
 		option.Config.EnableSocketLB = true
+		option.Config.Opts.SetBool(option.TraceSockNotify, true)
 		option.Config.EnableHostServicesTCP = true
 		option.Config.EnableHostServicesUDP = true
 		option.Config.EnableSessionAffinity = true
@@ -312,6 +314,7 @@ func initKubeProxyReplacementOptions() (bool, error) {
 		}
 		if !option.Config.EnableHostServicesTCP && !option.Config.EnableHostServicesUDP {
 			option.Config.EnableSocketLB = false
+			option.Config.Opts.SetBool(option.TraceSockNotify, false)
 		}
 	} else {
 		option.Config.EnableHostServicesTCP = false
