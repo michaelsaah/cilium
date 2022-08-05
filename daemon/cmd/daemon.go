@@ -65,6 +65,7 @@ import (
 	"github.com/cilium/cilium/pkg/maps/lbmap"
 	"github.com/cilium/cilium/pkg/maps/policymap"
 	"github.com/cilium/cilium/pkg/maps/sockmap"
+	"github.com/cilium/cilium/pkg/metadata"
 	"github.com/cilium/cilium/pkg/metrics"
 	monitoragent "github.com/cilium/cilium/pkg/monitor/agent"
 	monitorAPI "github.com/cilium/cilium/pkg/monitor/api"
@@ -182,6 +183,8 @@ type Daemon struct {
 	bgpSpeaker *speaker.MetalLBSpeaker
 
 	egressGatewayManager *egressgateway.Manager
+
+	metadataManager *metadata.Manager
 
 	apiLimiterSet *rate.APILimiterSet
 
@@ -643,6 +646,8 @@ func NewDaemon(ctx context.Context, cleaner *daemonCleanup, epMgr *endpointmanag
 		}
 	}
 
+	d.metadataManager = metadata.NewManager()
+
 	if option.Config.EnableIPv4EgressGateway {
 		d.egressGatewayManager = egressgateway.NewEgressGatewayManager(&d, d.identityAllocator)
 	}
@@ -660,6 +665,7 @@ func NewDaemon(ctx context.Context, cleaner *daemonCleanup, epMgr *endpointmanag
 		d.l7Proxy,
 		option.Config,
 		d.ipcache,
+		d.metadataManager,
 	)
 	nd.RegisterK8sNodeGetter(d.k8sWatcher)
 	d.ipcache.RegisterK8sSyncedChecker(&d)
@@ -1341,6 +1347,7 @@ func (d *Daemon) Close() {
 		d.datapathRegenTrigger.Shutdown()
 	}
 	d.nodeDiscovery.Close()
+	d.metadataManager.Close()
 }
 
 // TriggerReloadWithoutCompile causes all BPF programs and maps to be reloaded,
