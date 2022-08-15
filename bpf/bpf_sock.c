@@ -16,6 +16,7 @@
 #include "lib/identity.h"
 #include "lib/metrics.h"
 #include "lib/nat_46x64.h"
+#include "lib/trace_sock.h"
 
 #define SYS_REJECT	0
 #define SYS_PROCEED	1
@@ -340,6 +341,10 @@ static __always_inline int __sock4_xlate_fwd(struct bpf_sock_addr *ctx,
 #ifdef ENABLE_L7_LB
 	struct lb4_backend l7backend;
 #endif
+#if defined(BPF_HAVE_PERF_EVENT_OUTPUT) && defined(TRACE_SOCK_NOTIFY) 
+	__u64 sock_cookie = sock_local_cookie(ctx_full);
+	__u64 cgroup_id = 0;
+#endif
 
 	if (is_defined(ENABLE_SOCKET_LB_HOST_ONLY) && !in_hostns)
 		return -ENXIO;
@@ -356,6 +361,15 @@ static __always_inline int __sock4_xlate_fwd(struct bpf_sock_addr *ctx,
 		svc = sock4_wildcard_lookup_full(&key, in_hostns);
 	if (!svc)
 		return -ENXIO;
+
+#if defined(BPF_HAVE_PERF_EVENT_OUTPUT) && defined(TRACE_SOCK_NOTIFY) 
+	if (is_defined(BPF_HAVE_CGROUP_ID))
+		cgroup_id = get_current_cgroup_id();
+
+	send_trace_sock_notify4(ctx_full, XLATE_PRE_DIRECTION_FWD, dst_ip,
+				bpf_ntohs(dst_port), sock_cookie, cgroup_id,
+				ctx_full->protocol);
+#endif
 
 	/* Do not perform service translation for external IPs
 	 * that are not a local address because we don't want
@@ -444,6 +458,13 @@ static __always_inline int __sock4_xlate_fwd(struct bpf_sock_addr *ctx,
 
 	if (lb4_svc_is_affinity(svc) && !backend_from_affinity)
 		lb4_update_affinity_by_netns(svc, &id, backend_id);
+
+#if defined(BPF_HAVE_PERF_EVENT_OUTPUT) && defined(TRACE_SOCK_NOTIFY) 
+	send_trace_sock_notify4(ctx_full, XLATE_POST_DIRECTION_FWD, backend->address,
+				bpf_ntohs(backend->port), sock_cookie, cgroup_id,
+				ctx_full->protocol);
+#endif
+
 #ifdef ENABLE_L7_LB
 out:
 #endif
@@ -587,7 +608,16 @@ static __always_inline int __sock4_xlate_rev(struct bpf_sock_addr *ctx,
 		.address	= dst_ip,
 		.port		= dst_port,
 	};
+#if defined(BPF_HAVE_PERF_EVENT_OUTPUT) && defined(TRACE_SOCK_NOTIFY) 
+	__u64 sock_cookie = key.cookie;
+	__u64 cgroup_id = 0;
 
+	if (is_defined(BPF_HAVE_CGROUP_ID))
+		cgroup_id = get_current_cgroup_id();
+	send_trace_sock_notify4(ctx_full, XLATE_PRE_DIRECTION_REV, dst_ip,
+				bpf_ntohs(dst_port), sock_cookie, cgroup_id,
+				ctx_full->protocol);
+#endif
 	val = map_lookup_elem(&LB4_REVERSE_NAT_SK_MAP, &key);
 	if (val) {
 		struct lb4_service *svc;
@@ -608,6 +638,11 @@ static __always_inline int __sock4_xlate_rev(struct bpf_sock_addr *ctx,
 
 		ctx->user_ip4 = val->address;
 		ctx_set_port(ctx, val->port);
+#if defined(BPF_HAVE_PERF_EVENT_OUTPUT) && defined(TRACE_SOCK_NOTIFY) 
+		send_trace_sock_notify4(ctx_full, XLATE_POST_DIRECTION_REV, val->address,
+					bpf_ntohs(val->port), sock_cookie, cgroup_id,
+					ctx_full->protocol);
+#endif
 		return 0;
 	}
 
@@ -980,6 +1015,11 @@ static __always_inline int __sock6_xlate_fwd(struct bpf_sock_addr *ctx,
 #ifdef ENABLE_L7_LB
 	struct lb6_backend l7backend;
 #endif
+#if defined(BPF_HAVE_PERF_EVENT_OUTPUT) && defined(TRACE_SOCK_NOTIFY) 
+	__u64 sock_cookie = sock_local_cookie(ctx);
+	union v6addr dst_ip;
+	__u64 cgroup_id = 0;
+#endif
 
 	if (is_defined(ENABLE_SOCKET_LB_HOST_ONLY) && !in_hostns)
 		return -ENXIO;
@@ -990,11 +1030,23 @@ static __always_inline int __sock6_xlate_fwd(struct bpf_sock_addr *ctx,
 	ctx_get_v6_address(ctx, &key.address);
 	memcpy(&orig_key, &key, sizeof(key));
 
+#if defined(BPF_HAVE_PERF_EVENT_OUTPUT) && defined(TRACE_SOCK_NOTIFY) 
+	ctx_get_v6_address(ctx, &dst_ip);
+#endif
+
 	svc = lb6_lookup_service(&key, true);
 	if (!svc)
 		svc = sock6_wildcard_lookup_full(&key, in_hostns);
 	if (!svc)
 		return sock6_xlate_v4_in_v6(ctx, udp_only);
+
+#if defined(BPF_HAVE_PERF_EVENT_OUTPUT) && defined(TRACE_SOCK_NOTIFY) 
+	if (is_defined(BPF_HAVE_CGROUP_ID))
+		cgroup_id = get_current_cgroup_id();
+	send_trace_sock_notify6(ctx, XLATE_PRE_DIRECTION_FWD, &dst_ip,
+				bpf_ntohs(dst_port), sock_cookie, cgroup_id,
+				ctx->protocol);
+#endif
 
 	if (sock6_skip_xlate(svc, &orig_key.address))
 		return -EPERM;
@@ -1048,6 +1100,13 @@ static __always_inline int __sock6_xlate_fwd(struct bpf_sock_addr *ctx,
 
 	if (lb6_svc_is_affinity(svc) && !backend_from_affinity)
 		lb6_update_affinity_by_netns(svc, &id, backend_id);
+
+#if defined(BPF_HAVE_PERF_EVENT_OUTPUT) && defined(TRACE_SOCK_NOTIFY) 
+	send_trace_sock_notify6(ctx, XLATE_POST_DIRECTION_FWD, &backend->address,
+				bpf_ntohs(backend->port), sock_cookie, cgroup_id,
+				ctx->protocol);
+#endif
+
 #ifdef ENABLE_L7_LB
 out:
 #endif
@@ -1141,10 +1200,26 @@ static __always_inline int __sock6_xlate_rev(struct bpf_sock_addr *ctx)
 	struct ipv6_revnat_entry *val;
 
 	__u16 dst_port = ctx_dst_port(ctx);
+#if defined(BPF_HAVE_PERF_EVENT_OUTPUT) && defined(TRACE_SOCK_NOTIFY) 
+	union v6addr dst_ip;
+	__u64 sock_cookie = key.cookie;
+	__u64 cgroup_id = 0;
+#endif
 	key.cookie = sock_local_cookie(ctx);
 	key.port = dst_port;
-	ctx_get_v6_address(ctx, &key.address);
 
+	ctx_get_v6_address(ctx, &key.address);
+#if defined(BPF_HAVE_PERF_EVENT_OUTPUT) && defined(TRACE_SOCK_NOTIFY) 
+	ctx_get_v6_address(ctx, &dst_ip);
+#endif
+
+#if defined(BPF_HAVE_PERF_EVENT_OUTPUT) && defined(TRACE_SOCK_NOTIFY) 
+	if (is_defined(BPF_HAVE_CGROUP_ID))
+		cgroup_id = get_current_cgroup_id();
+	send_trace_sock_notify6(ctx, XLATE_PRE_DIRECTION_REV, &dst_ip,
+				bpf_ntohs(dst_port), sock_cookie, cgroup_id,
+				ctx->protocol);
+#endif
 	val = map_lookup_elem(&LB6_REVERSE_NAT_SK_MAP, &key);
 	if (val) {
 		struct lb6_service *svc;
@@ -1165,6 +1240,11 @@ static __always_inline int __sock6_xlate_rev(struct bpf_sock_addr *ctx)
 
 		ctx_set_v6_address(ctx, &val->address);
 		ctx_set_port(ctx, val->port);
+#if defined(BPF_HAVE_PERF_EVENT_OUTPUT) && defined(TRACE_SOCK_NOTIFY) 
+		send_trace_sock_notify6(ctx, XLATE_POST_DIRECTION_REV, &val->address,
+					bpf_ntohs(val->port), sock_cookie, cgroup_id,
+					ctx->protocol);
+#endif
 		return 0;
 	}
 #endif /* ENABLE_IPV6 */
