@@ -2,12 +2,14 @@ package metadata
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
 
 	"github.com/cilium/cilium/pkg/cgroups"
+	"github.com/cilium/cilium/pkg/defaults"
 	v1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -187,15 +189,19 @@ func (m *Manager) enable() {
 	m.checkCgroupPath.Do(func() {
 		for _, path := range cgroupBasePaths {
 			if _, err := m.fschecker.Stat(path); err != nil {
+				log.Infof("path %s err: %v", path, err)
 				continue
 			}
 			m.templateCgroupBasePath = path
 			break
 		}
 		if m.templateCgroupBasePath == "" {
-			log.Warnf("No valid cgroup base path found: socket " +
+			// log.Warnf("No valid cgroup base path found: socket " +
+			// 	"load-balancing tracing feature will not work")
+			log.Info("No valid cgroup base path found: socket " +
 				"load-balancing tracing feature will not work")
-			enable = false
+			m.dumpFiles(true)
+			// enable = false
 		}
 	})
 
@@ -305,6 +311,23 @@ func (m *Manager) updatePodMetadata(pod, oldPod *v1.Pod) {
 			if _, ok := currContainers[c.ContainerID]; !ok {
 				delete(pm.containers, c.ContainerID)
 			}
+		}
+	}
+}
+
+func (m *Manager) dumpFiles(iskind bool) {
+	dir := defaults.DefaultCgroupRoot
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, file := range files {
+		name := file.Name()
+		if strings.Contains(name, "kubepods") || strings.Contains(name, "pod") {
+			log.Infof("aditi-debug %s", name)
+		} else {
+			log.Infof("others %s", name)
 		}
 	}
 }
