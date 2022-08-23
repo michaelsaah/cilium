@@ -4,7 +4,8 @@ import "github.com/cilium/cilium/pkg/types"
 
 // Socket trace event point with respect to service translation
 const (
-	XlatePointPreDirectionFwd = iota
+	XlatePointPreDirectionUnknown = iota
+	XlatePointPreDirectionFwd
 	XlatePointPostDirectionFwd
 	XlatePointPreDirectionRev
 	XlatePointPostDirectionRev

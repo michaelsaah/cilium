@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strings"
 
 	"github.com/cilium/cilium/pkg/hubble/parser/common"
 
@@ -25,13 +26,14 @@ import (
 
 // Parser is a parser for SockTraceNotify payloads
 type Parser struct {
-	log            logrus.FieldLogger
-	endpointGetter getters.EndpointGetter
-	identityGetter getters.IdentityGetter
-	dnsGetter      getters.DNSGetter
-	ipGetter       getters.IPGetter
-	serviceGetter  getters.ServiceGetter
-	epResolver     *common.EndpointResolver
+	log               logrus.FieldLogger
+	endpointGetter    getters.EndpointGetter
+	identityGetter    getters.IdentityGetter
+	dnsGetter         getters.DNSGetter
+	ipGetter          getters.IPGetter
+	serviceGetter     getters.ServiceGetter
+	podMetadataGetter getters.PodMetadataGetter
+	epResolver        *common.EndpointResolver
 }
 
 // New creates a new parser
@@ -41,15 +43,16 @@ func New(log logrus.FieldLogger,
 	dnsGetter getters.DNSGetter,
 	ipGetter getters.IPGetter,
 	serviceGetter getters.ServiceGetter,
-) (*Parser, error) {
+	podMetadataGetter getters.PodMetadataGetter) (*Parser, error) {
 	return &Parser{
-		log:            log,
-		endpointGetter: endpointGetter,
-		identityGetter: identityGetter,
-		dnsGetter:      dnsGetter,
-		ipGetter:       ipGetter,
-		serviceGetter:  serviceGetter,
-		epResolver:     common.NewEndpointResolver(log, endpointGetter, identityGetter, ipGetter),
+		log:               log,
+		endpointGetter:    endpointGetter,
+		identityGetter:    identityGetter,
+		dnsGetter:         dnsGetter,
+		ipGetter:          ipGetter,
+		serviceGetter:     serviceGetter,
+		podMetadataGetter: podMetadataGetter,
+		epResolver:        common.NewEndpointResolver(log, endpointGetter, identityGetter, ipGetter),
 	}, nil
 }
 
@@ -77,12 +80,9 @@ func (p *Parser) Decode(data []byte, decoded *pb.Flow) error {
 	var ipVersion pb.IPVersion
 
 	dstIP, ipVersion = decodeDstIP(sock)
-	dstPort = byteorder.NetworkToHost16(sock.DstPort)
+	srcIP = p.decodeSrcIP(sock.CgroupId, ipVersion)
 
-	if isRevNat.GetValue() {
-		srcIP, dstIP = dstIP, srcIP
-		srcPort, dstPort = dstPort, srcPort
-	}
+	dstPort = sock.DstPort
 
 	decoded.Verdict = pb.Verdict_FORWARDED // TODO: Introduce new verdict?
 	decoded.IP = decodeL3(srcIP, dstIP, ipVersion)
@@ -97,6 +97,24 @@ func (p *Parser) Decode(data []byte, decoded *pb.Flow) error {
 	decoded.EventType = decodeCiliumEventType(sock.Type, sock.XlatePoint)
 	decoded.SockXlatePoint = pb.SocketTranslationPoint(sock.XlatePoint)
 	decoded.IsReply = isRevNat
+	return nil
+}
+
+func (p *Parser) decodeSrcIP(cgroupId uint64, ipVersion pb.IPVersion) net.IP {
+	if p.podMetadataGetter != nil {
+		if m := p.podMetadataGetter.GetParentPodMetadata(cgroupId); m != nil {
+			for _, podIP := range m.IPs {
+				isIPv6 := strings.Contains(podIP.IP, ":")
+				if isIPv6 && ipVersion == pb.IPVersion_IPv6 ||
+					!isIPv6 && ipVersion == pb.IPVersion_IPv4 {
+					return net.ParseIP(podIP.IP)
+				}
+			}
+			p.log.WithField("id", cgroupId).WithField("pod", m.Namespace+"/"+m.Name).Debug("no matching IP for pod")
+		}
+		p.log.WithField("id", cgroupId).Debug("unable to resolve cgroup id")
+	}
+
 	return nil
 }
 
@@ -167,16 +185,6 @@ func decodeCiliumEventType(eventType, subtype uint8) *pb.CiliumEventType {
 		Type:    int32(eventType),
 		SubType: int32(subtype),
 	}
-}
-
-func isPostXlate(xlatePoint uint8) bool {
-	switch xlatePoint {
-	case monitor.XlatePointPostDirectionRev,
-		monitor.XlatePointPostDirectionFwd:
-		return true
-	}
-
-	return false
 }
 
 func decodeRevNat(xlatePoint uint8) *wrapperspb.BoolValue {
