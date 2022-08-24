@@ -86,7 +86,7 @@ func (p *Parser) Decode(data []byte, decoded *pb.Flow) error {
 
 	decoded.Verdict = pb.Verdict_FORWARDED // TODO: Introduce new verdict?
 	decoded.IP = decodeL3(srcIP, dstIP, ipVersion)
-	decoded.L4 = decodeL4(sock.L4Proto, srcPort, dstPort)
+	decoded.L4, decoded.Summary = decodeL4(sock.L4Proto, srcPort, dstPort)
 	decoded.Source = p.epResolver.ResolveEndpoint(srcIP, 0)
 	decoded.SourceNames = nil // TODO: This requires the destination endpoint ID
 	decoded.SourceService = p.decodeService(srcIP, srcPort)
@@ -147,7 +147,7 @@ func decodeL3(srcIP, dstIP net.IP, ipVersion pb.IPVersion) *pb.IP {
 	}
 }
 
-func decodeL4(proto uint8, srcPort, dstPort uint16) *pb.Layer4 {
+func decodeL4(proto uint8, srcPort, dstPort uint16) (l4 *pb.Layer4, summary string) {
 	switch proto {
 	case monitor.L4ProtocolTCP:
 		return &pb.Layer4{
@@ -157,7 +157,7 @@ func decodeL4(proto uint8, srcPort, dstPort uint16) *pb.Layer4 {
 					DestinationPort: uint32(dstPort),
 				},
 			},
-		}
+		}, "TCP"
 	case monitor.L4ProtocolUDP:
 		return &pb.Layer4{
 			Protocol: &pb.Layer4_UDP{
@@ -166,10 +166,10 @@ func decodeL4(proto uint8, srcPort, dstPort uint16) *pb.Layer4 {
 					DestinationPort: uint32(dstPort),
 				},
 			},
-		}
+		}, "UDP"
 	}
 
-	return nil
+	return nil, "Unknown"
 }
 
 func (p *Parser) decodeService(ip net.IP, port uint16) *pb.Service {
