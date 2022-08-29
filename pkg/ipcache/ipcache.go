@@ -12,7 +12,6 @@ import (
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
-	"github.com/cilium/cilium/pkg/ipcache/types"
 	ipcacheTypes "github.com/cilium/cilium/pkg/ipcache/types"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/labels/cidr"
@@ -449,7 +448,7 @@ func (ipc *IPCache) RemoveMetadata(prefix netip.Prefix, resource ipcacheTypes.Re
 	ipc.TriggerLabelInjection()
 }
 
-func (ipc *IPCache) UpsertPrefixes(prefixes []netip.Prefix, src source.Source, resource types.ResourceID) {
+func (ipc *IPCache) UpsertPrefixes(prefixes []netip.Prefix, src source.Source, resource ipcacheTypes.ResourceID) {
 	ipc.metadata.Lock()
 	// TODO: Expand the labels lazily
 	for _, p := range prefixes {
@@ -460,7 +459,7 @@ func (ipc *IPCache) UpsertPrefixes(prefixes []netip.Prefix, src source.Source, r
 	ipc.TriggerLabelInjection()
 }
 
-func (ipc *IPCache) RemovePrefixes(prefixes []netip.Prefix, src source.Source, resource types.ResourceID) {
+func (ipc *IPCache) RemovePrefixes(prefixes []netip.Prefix, src source.Source, resource ipcacheTypes.ResourceID) {
 	ipc.metadata.Lock()
 	// TODO: Expand the labels lazily
 	for _, p := range prefixes {

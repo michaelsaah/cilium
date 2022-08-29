@@ -119,3 +119,14 @@ func IPsToNetPrefixes(ips []net.IP) []netip.Prefix {
 	}
 	return res
 }
+
+// PrefixesContain checks whether any of the prefixes in the provided slice
+// are the same as the target prefix. Returns true if 'target' is in 'prefixes'.
+func PrefixesContain(prefixes []netip.Prefix, target netip.Prefix) bool {
+	for _, p := range prefixes {
+		if p.Bits() == target.Bits() && p.Addr() == target.Addr() {
+			return true
+		}
+	}
+	return false
+}
