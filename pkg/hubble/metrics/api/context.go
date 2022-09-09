@@ -214,17 +214,14 @@ func (ls labelsSet) HasLabel(label string) bool {
 }
 
 func (ls labelsSet) String() string {
-	var b strings.Builder
+	var labels []string
 	// output the labels in a consistent order
-	for i, label := range contextLabelsList {
+	for _, label := range contextLabelsList {
 		if ls.HasLabel(label) {
-			b.WriteString(label)
-			if i < len(ls)-1 {
-				b.WriteString(",")
-			}
+			labels = append(labels, label)
 		}
 	}
-	return b.String()
+	return strings.Join(labels, ",")
 }
 
 func labelsContext(invertSourceDestination bool, wantedLabels labelsSet, flow *pb.Flow) (outputLabels []string, err error) {
