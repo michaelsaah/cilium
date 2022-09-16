@@ -11,6 +11,11 @@ type Model struct {
 
 // HTTPListener holds configuration for any listener that terminates and proxies HTTP
 // including HTTP and HTTPS.
+// Each holds the configuration info for one distinct HTTP listener, by
+//   - Hostname
+//   - TLS
+//   - Address
+//   - Port
 type HTTPListener struct {
 	// Name of the HTTPListener
 	Name string
@@ -18,15 +23,14 @@ type HTTPListener struct {
 	// from.
 	Sources []FullyQualifiedResource
 	// IPAddress that the listener should listen on.
-	// TODO(youngnick): Should this be a list, or should we have one listener per address?
 	// The string must be parseable as an IP address.
 	Address string
 	// Port on which the service can be expected to be accessed by clients.
 	Port uint32
-	// Hostnames that the listener should match.
+	// Hostname that the listener should match.
 	// Wildcards are supported in prefix or suffix forms, or the special wildcard `*`.
 	// An empty list means that the Listener should match all hostnames.
-	Hostnames []string
+	Hostname string
 	// TLS Certifcate information. If omitted, then the listener is a cleartext HTTP listener.
 	TLS *TLSSecret
 	// Routes associated with HTTP traffic to the service.
