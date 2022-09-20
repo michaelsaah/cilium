@@ -1,12 +1,10 @@
 package model
 
-import "sync"
-
 // Model holds an abstracted data model representing the translation
 // of various types of Kubernetes config to Cilium config.
 type Model struct {
 	HTTP []HTTPListener
-	mu   sync.Mutex
+	// mu   lock.Mutex
 }
 
 // HTTPListener holds configuration for any listener that terminates and proxies HTTP
@@ -77,7 +75,17 @@ type Backend struct {
 	Name string
 	// Namespace of the Service.
 	Namespace string
-	// Port is the port on the Service to connect to.
+	// Port contains the details of the port on the Service to connect to
 	// If unset, the same port as the top-level Listener will be used.
+	Port *BackendPort
+}
+
+// BackendPort holds the details of what port on the Service to connect to.
+// Only one of Port or Name can be set.
+type BackendPort struct {
+	// Port holds the numeric port to connect to.
 	Port uint32
+	// Name holds a string which will be used to connect to the port with a
+	// matching spec.ports[].name in the target Service.
+	Name string
 }
